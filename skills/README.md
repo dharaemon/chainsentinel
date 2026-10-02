@@ -5,8 +5,10 @@ These are [Claude Code skills](https://docs.claude.com/en/docs/claude-code/skill
 audit. The tool gathers evidence; the skills tell the model how to judge it.
 
 ## Layout
-- **`smart-contract-audit/`** — master orchestrator. Start here. It runs ChainSentinel,
-  resolves the proxy first, then dispatches to each exploit-class skill.
+- **`chainsentinel-setup/`** — bootstrap skill. Initialises and starts up the repo in
+  any agent (Claude Code or ChatGPT Codex): clone, venv, deps, `.env`, tests, live check.
+- **`smart-contract-audit/`** — master orchestrator. Start here for an audit. It runs
+  ChainSentinel, resolves the proxy first, then dispatches to each exploit-class skill.
 - One skill per exploit class, mapped from `data/taxonomy.yaml`:
 
 | Skill | Covers |
