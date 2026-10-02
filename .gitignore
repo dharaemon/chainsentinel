@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# Audit outputs
+chainsentinel_*.report.md
+chainsentinel_*.report.json
+chainsentinel_*.prompt.md
+out/
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

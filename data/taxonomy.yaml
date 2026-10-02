@@ -1,0 +1,263 @@
+# ChainSentinel exploit taxonomy
+# Each category maps to a skill file in skills/<skill>/SKILL.md
+# severity: informational | low | medium | high | critical
+# heuristics: regex/string signals scanned against verified source (best-effort pre-filters,
+#             NOT proof of a bug — they exist to focus the AI reviewer's attention).
+
+version: 1
+
+categories:
+  - id: reentrancy
+    name: Reentrancy
+    skill: reentrancy-review
+    default_severity: high
+    subtypes:
+      - single-function
+      - cross-function
+      - cross-contract
+      - read-only
+      - erc777-hook
+      - cross-chain-callback
+    heuristics:
+      - pattern: '\.call\{value:'
+        note: low-level value call, check state updates happen before
+      - pattern: '\.call\.value\('
+        note: legacy value call
+      - pattern: 'transfer\(|send\('
+        note: external transfer, verify checks-effects-interactions
+      - pattern: 'nonReentrant'
+        note: guard present (presence is good; absence on state-changing externals is a flag)
+      - pattern: 'tokensReceived|_beforeTokenTransfer|_afterTokenTransfer'
+        note: token hooks enable reentrancy
+
+  - id: arithmetic
+    name: Arithmetic & Numeric
+    skill: arithmetic-review
+    default_severity: medium
+    subtypes: [overflow, underflow, rounding, precision-loss, casting-truncation, signed-unsigned]
+    heuristics:
+      - pattern: 'unchecked\s*\{'
+        note: unchecked arithmetic block
+      - pattern: 'pragma solidity \^?0\.[0-7]\.'
+        note: pre-0.8 compiler, no built-in overflow checks
+      - pattern: 'uint(8|16|32|64|128)\b'
+        note: downcast target, check truncation
+      - pattern: '/ |\* '
+        note: review order of operations (div-before-mul precision loss)
+
+  - id: access-control
+    name: Access Control & Authorization
+    skill: access-control-review
+    default_severity: high
+    subtypes: [missing-modifier, public-initializer, tx-origin-auth, broken-rbac, unprotected-selfdestruct, unprotected-withdraw]
+    heuristics:
+      - pattern: 'tx\.origin'
+        note: tx.origin auth is phishable
+      - pattern: 'selfdestruct|suicide'
+        note: selfdestruct present, verify guarded
+      - pattern: 'function\s+initialize'
+        note: initializer, verify it cannot be re-called / front-run
+      - pattern: 'onlyOwner|onlyRole|require\(msg\.sender'
+        note: access checks present (absence on admin fns is the flag)
+      - pattern: 'delegatecall'
+        note: delegatecall, verify target is trusted
+
+  - id: proxy-upgradeability
+    name: Proxy & Upgradeability
+    skill: proxy-resolution
+    default_severity: high
+    subtypes: [uninitialized-impl, storage-collision, selector-clash, unprotected-upgrade, delegatecall-takeover, metamorphic]
+    heuristics:
+      - pattern: 'delegatecall'
+        note: proxy delegation
+      - pattern: 'upgradeTo|_upgradeTo|upgradeToAndCall'
+        note: upgrade entrypoint, verify access control
+      - pattern: '_IMPLEMENTATION_SLOT|_ADMIN_SLOT|_BEACON_SLOT'
+        note: EIP-1967 slots
+      - pattern: 'Initializable|initializer\b'
+        note: initializer pattern
+
+  - id: oracle-price
+    name: Oracle & Price Manipulation
+    skill: oracle-price-review
+    default_severity: critical
+    subtypes: [spot-price-oracle, flashloan-amplified, twap-manipulation, stale-data, single-source, bounds-ignored]
+    heuristics:
+      - pattern: 'getReserves|balanceOf\(address\(this\)\)|token0|token1'
+        note: reading DEX reserves / balances as price source
+      - pattern: 'getAmountsOut|getAmountOut|quote\('
+        note: router price query used as oracle
+      - pattern: 'latestAnswer|latestRoundData'
+        note: Chainlink feed, verify staleness + round completeness checks
+      - pattern: 'price0CumulativeLast|price1CumulativeLast'
+        note: TWAP accumulator
+
+  - id: flashloan
+    name: Flash Loan Enabled
+    skill: oracle-price-review
+    default_severity: high
+    subtypes: [price-manip, governance-capture, liquidation-abuse, reward-drain, invariant-break]
+    heuristics:
+      - pattern: 'flashLoan|flashloan|onFlashLoan|executeOperation'
+        note: flash loan callback surface
+      - pattern: 'IERC3156|IFlashLoanReceiver'
+        note: flash loan interface
+
+  - id: amm-liquidity
+    name: AMM / DEX / Liquidity
+    skill: amm-liquidity-review
+    default_severity: high
+    subtypes: [share-inflation, donation-attack, pool-imbalance, invariant-violation, lp-mispricing, jit-liquidity]
+    heuristics:
+      - pattern: 'totalSupply\(\)\s*==\s*0|totalSupply == 0'
+        note: first-depositor / share-inflation branch
+      - pattern: 'convertToShares|convertToAssets|previewDeposit|ERC4626'
+        note: ERC-4626 vault, check inflation protection (virtual shares/offset)
+      - pattern: 'balanceOf\(address\(this\)\)'
+        note: balance-based accounting is donation-attackable
+
+  - id: token-standard
+    name: Token Standard / BEP-20 Handling
+    skill: token-standard-review
+    default_severity: medium
+    subtypes: [fee-on-transfer, rebasing, missing-return-check, double-entrypoint, approve-race, phantom-function, reentrant-token]
+    heuristics:
+      - pattern: 'transferFrom\(|\.transfer\('
+        note: verify return value checked / SafeERC20 used
+      - pattern: 'safeTransfer|SafeERC20'
+        note: SafeERC20 in use (good)
+      - pattern: 'approve\('
+        note: approve race / infinite approval surface
+
+  - id: vault-lending
+    name: Vault / Lending / Staking Logic
+    skill: vault-lending-review
+    default_severity: high
+    subtypes: [reward-miscalc, collateral-valuation, liquidation-abuse, bad-debt, interest-manip, accounting-desync, emergency-bypass]
+    heuristics:
+      - pattern: 'rewardPerToken|accRewardPerShare|pendingReward'
+        note: reward accounting, check rounding + claim flow
+      - pattern: 'liquidate|seize|repayBorrow|borrowBalance'
+        note: lending primitives
+      - pattern: 'emergencyWithdraw'
+        note: emergency path, verify it respects accounting
+
+  - id: governance
+    name: Governance
+    skill: governance-review
+    default_severity: high
+    subtypes: [flashloan-voting, vote-buying, timelock-bypass, low-quorum, double-voting, malicious-proposal]
+    heuristics:
+      - pattern: 'getVotes|getPriorVotes|castVote|propose\('
+        note: governance voting surface
+      - pattern: 'TimelockController|timelock'
+        note: timelock, verify delay enforced on execution
+
+  - id: signatures
+    name: Signature & Cryptographic
+    skill: signature-review
+    default_severity: high
+    subtypes: [replay, cross-chain-replay, malleability, ecrecover-zero, missing-domain-separator, permit-griefing, merkle-forgery]
+    heuristics:
+      - pattern: 'ecrecover'
+        note: raw ecrecover, check zero-address + malleability + nonce
+      - pattern: 'nonce'
+        note: nonce usage, verify monotonic per signer
+      - pattern: 'DOMAIN_SEPARATOR|EIP712|_hashTypedData'
+        note: EIP-712 domain separation
+      - pattern: 'MerkleProof|merkleRoot'
+        note: merkle verification, check leaf construction
+
+  - id: randomness
+    name: Randomness
+    skill: randomness-review
+    default_severity: medium
+    subtypes: [block-based-prng, predictable-seed, validator-influenced, insecure-vrf]
+    heuristics:
+      - pattern: 'block\.timestamp|block\.difficulty|block\.prevrandao|blockhash\('
+        note: on-chain values used as randomness are predictable/manipulable
+      - pattern: 'keccak256\(abi\.encodePacked\(block'
+        note: block-derived PRNG seed
+      - pattern: 'VRFConsumer|requestRandomness'
+        note: VRF integration, verify request/fulfill handling
+
+  - id: dos
+    name: Denial of Service
+    skill: dos-review
+    default_severity: medium
+    subtypes: [unbounded-loop, revert-in-loop, gas-griefing, block-stuffing, forced-ether, push-payment]
+    heuristics:
+      - pattern: 'for\s*\(|while\s*\('
+        note: loop, check bound is attacker-influenceable
+      - pattern: '\.transfer\(|\.send\('
+        note: push payment can be griefed by reverting recipient
+
+  - id: external-call
+    name: Call / External Interaction
+    skill: external-call-review
+    default_severity: medium
+    subtypes: [unchecked-return, arbitrary-call, returndata-bomb, callback-gas-grief, missing-existence-check]
+    heuristics:
+      - pattern: '\.call\(|\.delegatecall\(|\.staticcall\('
+        note: low-level call, verify return value + target
+      - pattern: 'functionCall|Address\.'
+        note: OZ Address lib usage
+
+  - id: initialization
+    name: Initialization & Lifecycle
+    skill: access-control-review
+    default_severity: high
+    subtypes: [constructor-confusion, re-initialization, frontrun-init, zero-value-assumption]
+    heuristics:
+      - pattern: 'function\s+initialize|initializer\b|reinitializer'
+        note: initializer lifecycle
+
+  - id: state-storage
+    name: State & Storage
+    skill: storage-review
+    default_severity: medium
+    subtypes: [storage-pointer-bug, uninitialized-pointer, packed-corruption, mapping-delete]
+    heuristics:
+      - pattern: 'assembly\s*\{'
+        note: inline assembly, review storage slot math
+      - pattern: 'sstore|sload'
+        note: raw storage access
+
+  - id: business-logic
+    name: Business Logic / Invariant
+    skill: business-logic-review
+    default_severity: high
+    subtypes: [broken-invariant, fee-logic, edge-cases, state-machine, eoa-assumption, composability]
+    heuristics:
+      - pattern: 'msg\.sender == tx\.origin|isContract|code\.length'
+        note: EOA-only assumption, often bypassable
+      - pattern: 'fee|Fee'
+        note: fee math, check for over/under charge + rounding
+
+  - id: cross-chain-bridge
+    name: Cross-Chain / Bridge
+    skill: bridge-review
+    default_severity: critical
+    subtypes: [message-forgery, cross-chain-replay, validator-compromise, mint-burn-desync, light-client-bug]
+    heuristics:
+      - pattern: 'bridge|Bridge|relayer|lzReceive|_nonblockingLzReceive|ccipReceive'
+        note: cross-chain message handler, verify source authentication
+      - pattern: 'chainId|block\.chainid'
+        note: chain id usage, verify replay protection
+
+  - id: rugpull-honeypot
+    name: Rug Pull / Honeypot / Malicious Admin
+    skill: rugpull-honeypot-review
+    default_severity: critical
+    subtypes: [hidden-mint, removable-liquidity, blacklist-trap, disabled-sell, backdoor-admin, high-tax, ownership-not-renounced]
+    heuristics:
+      - pattern: 'function\s+mint|_mint\('
+        note: mint capability, check who can call and if capped
+      - pattern: 'blacklist|blocklist|_isExcluded|isBot|_bots'
+        note: blacklist/anti-bot trap used to block sells
+      - pattern: 'onlyOwner.*(setFee|setTax|setMaxTx|updateFee)'
+        note: owner can change tax/limits arbitrarily
+      - pattern: 'renounceOwnership|transferOwnership'
+        note: ownership controls, check if renounced
+      - pattern: 'pause\(|_pause|whenNotPaused'
+        note: pausability can freeze user funds

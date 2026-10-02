@@ -1,0 +1,10 @@
+# Core (required)
+pyyaml>=6.0
+
+# Optional but recommended for deeper static analysis.
+# Install separately; Slither also needs a matching solc (use solc-select).
+#   python3 -m pip install slither-analyzer
+#   python3 -m pip install solc-select && solc-select install 0.8.20 && solc-select use 0.8.20
+
+# Optional: richer on-chain interaction.
+#   python3 -m pip install web3

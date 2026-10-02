@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chainsentinel"
+version = "0.1.0"
+description = "AI-assisted, read-only static auditor for public smart contracts (BSC/EVM)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ChainSentinel contributors" }]
+keywords = ["smart-contract", "security", "audit", "bsc", "evm", "slither", "defi"]
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+slither = ["slither-analyzer>=0.10"]
+web3 = ["web3>=6.0"]
+dev = ["pytest>=7"]
+
+[project.scripts]
+chainsentinel = "chainsentinel.cli:main"
+
+[tool.setuptools]
+packages = ["chainsentinel", "chainsentinel.analyzers"]
+
+[tool.setuptools.package-data]
+chainsentinel = ["../data/taxonomy.yaml"]
