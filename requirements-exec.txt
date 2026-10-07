@@ -1,0 +1,7 @@
+# Optional dependencies for the LIVE execution layer (flashscan/execution).
+# The scanner, planner, dry-run `plan`, and `simulate` modes need NONE of these
+# (stdlib only). You only need eth-account to SIGN and SUBMIT real transactions.
+#
+#   .venv/bin/pip install -r requirements-exec.txt
+#
+eth-account>=0.11.0

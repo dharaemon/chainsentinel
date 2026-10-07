@@ -23,3 +23,8 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Local agent tooling / installed skills (not part of the project)
+.agents/
+.claude/
+skills-lock.json
